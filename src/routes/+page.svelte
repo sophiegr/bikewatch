@@ -10,11 +10,17 @@
     <svg>
         {#key mapViewChanged}
             {#each filteredStations as station}
-                <circle { ...getCoords(station) } r={ radiusScale(station.totalTraffic) } fill="steelblue" />
+                <circle style="--departure-ratio: { stationFlow(station.departures / station.totalTraffic) }" { ...getCoords(station) } r={ radiusScale(station.totalTraffic) } fill="steelblue" />
             {/each}
         {/key}
     </svg>
 </div>
+<div class="legend">
+	<div style="--departure-ratio: 1">More departures</div>
+	<div style="--departure-ratio: 0.5">Balanced</div>
+	<div style="--departure-ratio: 0">More arrivals</div>
+</div>
+
 
 
 <script>
@@ -90,6 +96,7 @@
             station.totalTraffic = station.arrivals + station.departures;
             return station;
         });
+        
     })
     
     $: radiusScale = d3.scaleSqrt()
@@ -124,6 +131,11 @@
         station.totalTraffic = station.arrivals + station.departures;
         return station;
     });
+
+    let stationFlow = d3.scaleQuantize()
+        .domain([0, 1])
+        .range([0, 0.5, 1]);
+
 </script>
 
 <style>
