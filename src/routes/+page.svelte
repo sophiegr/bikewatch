@@ -1,7 +1,7 @@
 <header>
-    <h1>🚴🏻‍♀️ Bikewatching</h1>
+    <h1>Corportate Ownership Rates Over Time in Each Boston Neighborhood</h1>
     <label>Filter by time:
-        <input type=range min="-1" max="1440" bind:value={timeFilter}/>
+        <input type=range min="-1" max="2024" bind:value={timeFilter}/>
         <time>{ timeFilterLabel }</time>
     </label>
     <em>(any time)</em>
@@ -9,18 +9,12 @@
 <div id="map">
     <svg>
         {#key mapViewChanged}
-            {#each filteredStations as station}
-                <circle style="--departure-ratio: { stationFlow(station.departures / station.totalTraffic) }" { ...getCoords(station) } r={ radiusScale(station.totalTraffic) } fill="steelblue" />
+            {#each neighborhoods as neighborhood}
+                <circle { ...getCoords(neighborhood) } r="5" fill="steelblue" />
             {/each}
         {/key}
     </svg>
 </div>
-<div class="legend">
-	<div style="--departure-ratio: 1">More departures</div>
-	<div style="--departure-ratio: 0.5">Balanced</div>
-	<div style="--departure-ratio: 0">More arrivals</div>
-</div>
-
 
 
 <script>
@@ -29,9 +23,10 @@
     import "../../node_modules/mapbox-gl/dist/mapbox-gl.css";
     mapboxgl.accessToken = "pk.eyJ1Ijoic29ncmVlbiIsImEiOiJjbHVwc280cm0xOHU0MmxtcnE2ZGdveXF5In0.hbXdn_hdpt1MX0gubJtbLw";
     import { onMount } from "svelte";
-
+    let neighborhoods = [];
     let stations = [];
     let trips = [];
+    let id;
     let map, arrivals, departures;
     let mapViewChanged = 0;
     $: map?.on("move", evt => mapViewChanged++);
@@ -48,70 +43,31 @@
             zoom: 12,
         });
         await new Promise(resolve => map.on("load", resolve));
-        map.addSource("boston_route", {
-            type: "geojson",
-            data: "https://bostonopendata-boston.opendata.arcgis.com/datasets/boston::existing-bike-network-2022.geojson?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D",
-        });
-        map.addSource("cambridge_route", {
-            type: "geojson",
-            data: "https://raw.githubusercontent.com/cambridgegis/cambridgegis_data/main/Recreation/Bike_Facilities/RECREATION_BikeFacilities.geojson",
-        });
-        map.addLayer({
-            id: "boston_layer", // A name for our layer (up to you)
-            type: "line", // one of the supported layer types, e.g. line, circle, etc.
-            source: "boston_route", // The id we specified in `addSource()`
-            paint: {
-                "line-color": "purple",
-                "line-width": 3,
-                "line-opacity": 0.4,
-            },
-        });
-        map.addLayer({
-            id: "cambridge_layer", // A name for our layer (up to you)
-            type: "line", // one of the supported layer types, e.g. line, circle, etc.
-            source: "cambridge_route", // The id we specified in `addSource()`
-            paint: {
-                "line-color": "purple",
-                "line-width": 3,
-                "line-opacity": 0.4,
-            },
-        });
 
-        stations = await d3.csv("https://vis-society.github.io/labs/8/data/bluebikes-stations.csv");
-        trips = await d3.csv("https://vis-society.github.io/labs/8/data/bluebikes-traffic-2024-03.csv").then(trips => {
-            for (let trip of trips) {
-                trip.started_at = new Date(trip.started_at);
-                trip.ended_at = new Date(trip.ended_at);
-            }
-            return trips;
-        });
+        neighborhoods = await d3.csv("/src/data/ownership_over_time.csv")
 
-        departures = d3.rollup(trips, v => v.length, d => d.start_station_id);
-        arrivals = d3.rollup(trips, v => v.length, d => d.end_station_id);
+        
+
 
         stations = stations.map(station => {
-            let id = station.Number;
+            let neighborhood = station.Neighborhood;
             station.arrivals = arrivals.get(id) ?? 0;
             station.departures = departures.get(id) ?? 0;
             station.totalTraffic = station.arrivals + station.departures;
             return station;
         });
-        
     })
     
     $: radiusScale = d3.scaleSqrt()
-        .domain([0, d3.max(stations, d => d.totalTraffic)])
-        .range([0, 25]);
+        .domain([0, d3.max(neighborhoods, d => d.corp_own_rate)])
+        .range([0, 1]);
 
     function getCoords (station) {
-            let point = new mapboxgl.LngLat(+station.Long, +station.Lat);
+            let point = new mapboxgl.LngLat(+station.Lon, +station.Lat);
             let {x, y} = map.project(point);
             return {cx: x, cy: y};
     }
 
-    function minutesSinceMidnight (date) {
-        return date.getHours() * 60 + date.getMinutes();
-    }
 
     $: filteredTrips = timeFilter === -1? trips : trips.filter(trip => {
         let startedMinutes = minutesSinceMidnight(trip.started_at);
@@ -131,11 +87,6 @@
         station.totalTraffic = station.arrivals + station.departures;
         return station;
     });
-
-    let stationFlow = d3.scaleQuantize()
-        .domain([0, 1])
-        .range([0, 0.5, 1]);
-
 </script>
 
 <style>
